@@ -1,42 +1,18 @@
+
 import json
 import logging
 import os
-import pickle  # nosec
-import six
 import subprocess  # nosec
 
+import six
 from django.conf import settings
-
+from waldur_ansible.backend_processing.exceptions import AnsibleBackendError
 from waldur_core.core.views import RefreshTokenMixin
 
 logger = logging.getLogger(__name__)
 
 
-class AnsibleBackendError(Exception):
-    def __init__(self, *args, **kwargs):
-        if not args:
-            super(AnsibleBackendError, self).__init__(*args, **kwargs)
-
-        # CalledProcessError is not serializable by Celery, because it uses custom arguments *args
-        # and define __init__ method, but don't call Exception.__init__ method
-        # http://docs.celeryproject.org/en/latest/userguide/tasks.html#creating-pickleable-exceptions
-        # That's why when Celery worker tries to deserialize AnsibleBackendError,
-        # it uses empty invalid *args. It leads to unrecoverable error and worker dies.
-        # When all workers are dead, all tasks are stuck in pending state forever.
-        # In order to fix this issue we serialize exception to text type explicitly.
-        args = list(args)
-        for i, arg in enumerate(args):
-            try:
-                # pickle is used to check celery internal errors serialization,
-                # it is safe from security point of view
-                pickle.loads(pickle.dumps(arg))  # nosec
-            except (pickle.PickleError, TypeError):
-                args[i] = six.text_type(arg)
-
-        super(AnsibleBackendError, self).__init__(*args, **kwargs)
-
-
-class AnsibleBackend(object):
+class AnsiblePlaybookBackend(object):
     def __init__(self, playbook):
         self.playbook = playbook
 
@@ -53,12 +29,18 @@ class AnsibleBackend(object):
             command.append('--check')
 
         extra_vars = job.arguments.copy()
+        tags = extra_vars['--tags'] if extra_vars['--tags'] else None
+        if tags:
+            del extra_vars['--tags']
         extra_vars.update(self._get_extra_vars(job))
         # XXX: Passing arguments in following way is supported in Ansible>=1.2
         command.extend(['--extra-vars', json.dumps(extra_vars)])
 
         command.extend(['--ssh-common-args', '-o UserKnownHostsFile=/dev/null'])
-        return command + [playbook_path]
+        result = command + [playbook_path]
+        if tags:
+            result.extend(['--tags', "\"" + tags + "\""])
+        return result
 
     def _get_extra_vars(self, job):
         return dict(

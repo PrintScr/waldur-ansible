@@ -14,7 +14,6 @@ class RunJobExecutor(core_executors.CreateExecutor):
         return core_tasks.BackendMethodTask().si(
             serialized_job, 'run_job', state_transition='begin_creating')
 
-
 class DeleteJobExecutor(core_executors.DeleteExecutor):
     @classmethod
     def get_task_signature(cls, job, serialized_job, **kwargs):
@@ -32,3 +31,9 @@ class DeleteJobExecutor(core_executors.DeleteExecutor):
                 delete_volumes=True
             ))
         return chain(*deletion_tasks)
+
+class PythonManagementRequestExecutor(core_executors.CreateExecutor):
+    @classmethod
+    def get_task_signature(cls, python_management, serialized_python_management_request, **kwargs):
+        return core_tasks.BackendMethodTask().si(
+            serialized_python_management_request, 'process_python_management_request', state_transition='begin_creating')

@@ -11,6 +11,9 @@ tests_requires = [
 install_requires = [
     'waldur-core>=0.151.0',
     'waldur-openstack>=0.38.2',
+    'lxml>=3.2.0',
+    'beautifulsoup4==4.6.0',
+    'redis==2.10.3',
 ]
 
 
